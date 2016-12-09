@@ -451,7 +451,6 @@ void valsCommand(client *c) {
                     numreps += 2;
                 }
             }
-            decrRefCount(valobj);
         }
         decrRefCount(keyobj);
     }
