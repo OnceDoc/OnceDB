@@ -427,6 +427,38 @@ void keysCommand(client *c) {
     setDeferredMultiBulkLength(c,replylen,numkeys);
 }
 
+void valsCommand(client *c) {
+    dictIterator *di;
+    dictEntry *de;
+    sds pattern = c->argv[1]->ptr;
+    int plen = sdslen(pattern), allvals;
+    unsigned long numreps = 0;
+    void *replylen = addDeferredMultiBulkLength(c);
+
+    di = dictGetSafeIterator(c->db->dict);
+    allvals = (pattern[0] == '*' && pattern[1] == '\0');
+    while((de = dictNext(di)) != NULL) {
+        sds key = dictGetKey(de);
+        robj *keyobj = createStringObject(key,sdslen(key));
+
+        if (expireIfNeeded(c->db,keyobj) == 0) {
+            robj *valobj = dictGetVal(de);
+            if (valobj->type == OBJ_STRING) {
+                sds val = valobj->ptr;
+                if (allvals || stringmatchlen(pattern,plen,val,sdslen(val),0)) {
+                    addReplyBulk(c,keyobj);
+                    addReplyBulk(c,valobj);
+                    numreps += 2;
+                }
+            }
+            decrRefCount(valobj);
+        }
+        decrRefCount(keyobj);
+    }
+    dictReleaseIterator(di);
+    setDeferredMultiBulkLength(c,replylen,numreps);
+}
+
 /* This callback is used by scanGenericCommand in order to collect elements
  * returned by the dictionary iterator into a list. */
 void scanCallback(void *privdata, const dictEntry *de) {

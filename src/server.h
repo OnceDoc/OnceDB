@@ -1500,6 +1500,7 @@ void incrbyfloatCommand(client *c);
 void selectCommand(client *c);
 void randomkeyCommand(client *c);
 void keysCommand(client *c);
+void valsCommand(client *c);
 void scanCommand(client *c);
 void dbsizeCommand(client *c);
 void lastsaveCommand(client *c);
