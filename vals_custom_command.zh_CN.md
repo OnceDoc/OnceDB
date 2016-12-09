@@ -93,15 +93,23 @@ VALS 命令使用示例：
     redis> MSET key1 one key2 two key3 three key4 four
     "OK"
     redis> VALS *o*
-    1) "four"
+    1) "key2"
     2) "two"
-    3) "one"
-    redis> VALS t??
-    1) "two"
-    redis> VALS *
-    1) "four"
-    2) "three"
-    3) "two"
+    3) "key1"
     4) "one"
+    5) "key4"
+    6) "four"
+    redis> VALS t??
+    1) "key2"
+    2) "two"
+    redis> VALS *
+    1) "key2"
+    2) "two"
+    3) "key3"
+    4) "three"
+    5) "key1"
+    6) "one"
+    7) "key4"
+    8) "four"
     redis> 
 
