@@ -800,3 +800,45 @@ void hscanCommand(client *c) {
         checkType(c,o,OBJ_HASH)) return;
     scanGenericCommand(c,o,cursor);
 }
+
+void hselectCommand(client *c) {
+    dictIterator *di;
+    dictEntry *de;
+    sds pattern = c->argv[1]->ptr;
+    sds hpattern = c->argv[3]->ptr;
+    int plen = sdslen(pattern), allkeys;
+    int hplen = sdslen(hpattern), anyhval;
+    unsigned long numkeys = 0;
+    void *replylen = addDeferredMultiBulkLength(c);
+
+    di = dictGetSafeIterator(c->db->dict);
+    allkeys = (pattern[0] == '*' && pattern[1] == '\0');
+    anyhval = (hpattern[0] == '*' && hpattern[1] == '\0');
+    while((de = dictNext(di)) != NULL) {
+        sds key = dictGetKey(de);
+        robj *keyobj;
+
+        if (allkeys || stringmatchlen(pattern,plen,key,sdslen(key),0)) {
+            keyobj = createStringObject(key,sdslen(key));
+            if (expireIfNeeded(c->db,keyobj) == 0) {
+                robj *valobj = dictGetVal(de);
+                if (valobj->type == OBJ_HASH) {
+                    if (hashTypeExists(valobj,c->argv[2])) {
+                        dictEntry *hde;
+                        hde = dictFind(valobj->ptr, c->argv[2]);
+                        if (hde != NULL) {
+                            sds hval = dictGetVal(hde);
+                            if (anyhval || stringmatchlen(hpattern,hplen,hval,sdslen(hval),0)) {
+                                addReplyBulk(c,keyobj);
+                                numkeys++;
+                            }
+                        }
+                    }
+                }
+            }
+            decrRefCount(keyobj);
+        }
+    }
+    dictReleaseIterator(di);
+    setDeferredMultiBulkLength(c,replylen,numkeys);
+}
