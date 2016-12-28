@@ -210,6 +210,7 @@ struct redisCommand redisCommandTable[] = {
     {"hexists",hexistsCommand,3,"rF",0,NULL,1,1,1,0,0},
     {"hscan",hscanCommand,-3,"rR",0,NULL,1,1,1,0,0},
     {"hselect",hselectCommand,4,"rS",0,NULL,1,1,1,0,0},
+    {"hmselect",hmselectCommand,-4,"rS",0,NULL,1,1,1,0,0},
     {"incrby",incrbyCommand,3,"wmF",0,NULL,1,1,1,0,0},
     {"decrby",decrbyCommand,3,"wmF",0,NULL,1,1,1,0,0},
     {"incrbyfloat",incrbyfloatCommand,3,"wmF",0,NULL,1,1,1,0,0},
