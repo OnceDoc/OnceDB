@@ -824,10 +824,10 @@ void hselectCommand(client *c) {
                 robj *valobj = dictGetVal(de);
                 if (valobj->type == OBJ_HASH) {
                     if (hashTypeExists(valobj,c->argv[2])) {
-                        dictEntry *hde;
-                        hde = dictFind(valobj->ptr, c->argv[2]);
-                        if (hde != NULL) {
-                            sds hval = dictGetVal(hde);
+                        robj *hvalobj;
+                        hvalobj = hashTypeGetObject(valobj, c->argv[2]);
+                        if (hvalobj != NULL) {
+                            sds hval = hvalobj->ptr;
                             if (anyhval || stringmatchlen(hpattern,hplen,hval,sdslen(hval),0)) {
                                 addReplyBulk(c,keyobj);
                                 numkeys++;
