@@ -833,6 +833,7 @@ void hselectCommand(client *c) {
                                 numkeys++;
                             }
                         }
+                        decrRefCount(hvalobj);
                     }
                 }
             }
