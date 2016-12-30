@@ -887,16 +887,18 @@ void hmselectCommand(client *c) {
                                     decrRefCount(hvalobj);
                                 }
                                 else {
-                                    break;
                                     decrRefCount(hvalobj);
+                                    break;
                                 }
                             }
                             else {
-                                break;
                                 decrRefCount(hvalobj);
+                                break;
                             }
                         }
-                        else break;
+                        else {
+                            break;
+                        }
                     }
                 }
             }
