@@ -826,10 +826,12 @@ void hselectCommand(client *c) {
                     if (hashTypeExists(valobj,c->argv[2])) {
                         robj *hvalobj;
                         if ((hvalobj = hashTypeGetObject(valobj, c->argv[2])) != NULL) {
-                            sds hval = hvalobj->ptr;
-                            if (anyhval || stringmatchlen(hpattern,hplen,hval,sdslen(hval),0)) {
-                                addReplyBulk(c,keyobj);
-                                numkeys++;
+                            if (hvalobj->type == OBJ_STRING) {
+                                sds hval = hvalobj->ptr;
+                                if (anyhval || stringmatchlen(hpattern,hplen,hval,sdslen(hval),0)) {
+                                    addReplyBulk(c,keyobj);
+                                    numkeys++;
+                                }
                             }
                         }
                         decrRefCount(hvalobj);
@@ -871,21 +873,23 @@ void hmselectCommand(client *c) {
                         if (hashTypeExists(valobj,c->argv[i])) {
                             robj *hvalobj;
                             if ((hvalobj = hashTypeGetObject(valobj, c->argv[i])) != NULL) {
-                                sds hval = hvalobj->ptr;
-                                hpattern = c->argv[i+1]->ptr;
-                                hplen = sdslen(hpattern);
-                                anyhval = (hpattern[0] == '*' && hpattern[1] == '\0');
-                                if (anyhval || stringmatchlen(hpattern,hplen,hval,sdslen(hval),0)) {
-                                    if (i + 2 < c->argc) {
-                                        decrRefCount(hvalobj);
-                                        continue;
-                                    } else {
-                                        addReplyBulk(c,keyobj);
-                                        numkeys++;
+                                if (hvalobj->type == OBJ_STRING) {
+                                    sds hval = hvalobj->ptr;
+                                    hpattern = c->argv[i+1]->ptr;
+                                    hplen = sdslen(hpattern);
+                                    anyhval = (hpattern[0] == '*' && hpattern[1] == '\0');
+                                    if (anyhval || stringmatchlen(hpattern,hplen,hval,sdslen(hval),0)) {
+                                        if (i + 2 < c->argc) {
+                                            decrRefCount(hvalobj);
+                                            continue;
+                                        } else {
+                                            addReplyBulk(c,keyobj);
+                                            numkeys++;
+                                        }
                                     }
                                 }
-                                decrRefCount(hvalobj);
                             }
+                            decrRefCount(hvalobj);
                         }
                         break;
                     }
