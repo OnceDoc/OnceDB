@@ -1,3 +1,24 @@
+Build OnceDB
+--------------
+
+    git clone https://github.com/OnceDoc/OnceDB.git
+
+    #将所有.sh变成可执行文件
+    find -type f -name "*.sh" -exec chmod +x \{\} \;
+
+    #将configure变成可执行文件
+    chmod +x ./deps/jemalloc/configure
+
+    #build
+    make
+    #启动测试
+    ./src/redis-server
+
+
+
+
+
+
 This README is just a fast *quick start* document. You can find more detailed documentation at http://redis.io.
 
 What is Redis?
