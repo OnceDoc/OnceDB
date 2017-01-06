@@ -448,41 +448,28 @@ void valsCommand(client *c) {
                 vlen = sdslen(val);
                 if (allvals) {
                     addReplyBulk(c,keyobj);
-                    if (vlen > 200) {
-                        sdsrange(val,0,199);
-                        val = sdscat(val,"...");
-                        valobj = createStringObject(val,sdslen(val));
-                        addReplyBulk(c,valobj);
-                        decrRefCount(valobj);
-                    } else {
-                        addReplyBulk(c,valobj);
-                    }
+                    addReplyBulk(c,valobj);
                     numreps += 2;
                 } else {
                     int pos;
                     if ((pos = returnposstringmatchlen(pattern,plen,val,vlen,0)) != 0) {
                         addReplyBulk(c,keyobj);
-                        if (vlen > 200) {
-                            pos--;
-                            if (pos > 100) {
-                                sds valcopy = sdsdup(val);
-                                sds new = sdsnew("...");
-                                sdsrange(val,pos-100,pos-1);
-                                val = sdscatsds(new,val);
-                                if (pos+100 < vlen) {
-                                    sdsrange(valcopy,pos,pos+99);
-                                    val = sdscatsds(val,valcopy);
-                                    val = sdscat(val,"...");
-                                } else {
-                                    sdsrange(valcopy,pos,vlen-1);
-                                    val = sdscatsds(val,valcopy);
-                                }
-                                sdsfree(new);
-                                sdsfree(valcopy);
-                            } else {
-                                sdsrange(val,0,199);
+                        pos--;
+                        if (pos > 100) {
+                            sds valcopy = sdsdup(val);
+                            sds new = sdsnew("...");
+                            sdsrange(val,pos-100,pos-1);
+                            val = sdscatsds(new,val);
+                            if (pos+101 < vlen) {
+                                sdsrange(valcopy,pos,pos+100);
+                                val = sdscatsds(val,valcopy);
                                 val = sdscat(val,"...");
+                            } else {
+                                sdsrange(valcopy,pos,vlen-1);
+                                val = sdscatsds(val,valcopy);
                             }
+                            sdsfree(new);
+                            sdsfree(valcopy);
                             valobj = createStringObject(val,sdslen(val));
                             addReplyBulk(c,valobj);
                             decrRefCount(valobj);
