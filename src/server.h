@@ -1603,6 +1603,8 @@ void hvalsCommand(client *c);
 void hgetallCommand(client *c);
 void hexistsCommand(client *c);
 void hscanCommand(client *c);
+void searchCommand(client *c);
+void hsearchCommand(client *c);
 void hselectCommand(client *c);
 void hmselectCommand(client *c);
 void configCommand(client *c);

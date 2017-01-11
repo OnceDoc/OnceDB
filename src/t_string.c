@@ -471,3 +471,85 @@ void strlenCommand(client *c) {
         checkType(c,o,OBJ_STRING)) return;
     addReplyLongLong(c,stringObjectLen(o));
 }
+
+
+/*
+search [key pattern] [operator] [value]
+*/
+void searchCommand(client *c) {
+    dictIterator *di;
+    dictEntry *de;
+    sds pattern = c->argv[1]->ptr;
+    sds operator = c->argv[2]->ptr;
+    sds vSearch = c->argv[3]->ptr;
+    int lSearch = sdslen(vSearch); 
+    int plen = sdslen(pattern), allkeys;
+    unsigned long numreps = 0;
+
+    void *replylen = addDeferredMultiBulkLength(c);
+    allkeys = (pattern[0] == '*' && pattern[1] == '\0');
+    di = dictGetSafeIterator(c->db->dict);
+    while((de = dictNext(di)) != NULL) {
+        sds key = dictGetKey(de);
+
+        if (allkeys || stringmatchlen(pattern,plen,key,sdslen(key),0)) {
+            robj *keyobj = createStringObject(key,sdslen(key));
+            long long nVal, nSearch;
+
+            if (expireIfNeeded(c->db,keyobj) == 0) {
+                robj *valobj = dictGetVal(de);
+                if (valobj->type == OBJ_STRING) {
+                    robj *devalobj = getDecodedObject(valobj);
+                    sds val = devalobj->ptr;
+
+                    int pos = -1;
+                    if (operator[0] == '~' && operator[1] == '\0') {
+                        char *found = strstr(val, vSearch);
+                        if (found != NULL) {
+                            pos = found - val;
+                        }
+                    } else if (operator[0] == '=' && operator[1] == '\0') {
+                        if (!strcmp(val, vSearch)) {
+                            pos = 0;
+                        }
+                    } else if (operator[0] == '>' && operator[1] == '\0') {
+                        if (string2ll(val,sdslen(val),&nVal) && string2ll(vSearch,lSearch,&nSearch)) {
+                            if (nVal > nSearch) {
+                                pos = 0;
+                            }
+                        }
+                    } else if (operator[0] == '<' && operator[1] == '\0') {
+                        if (string2ll(val,sdslen(val),&nVal) && string2ll(vSearch,lSearch,&nSearch)) {
+                            if (nVal < nSearch) {
+                                pos = 0;
+                            }
+                        }
+                    } else if (operator[0] == '>' && operator[1] == '=' && operator[2] == '\0') {
+                        if (string2ll(val,sdslen(val),&nVal) && string2ll(vSearch,lSearch,&nSearch)) {
+                            if (nVal >= nSearch) {
+                                pos = 0;
+                            }
+                        }
+                    } else if (operator[0] == '<' && operator[1] == '=' && operator[2] == '\0') {
+                        if (string2ll(val,sdslen(val),&nVal) && string2ll(vSearch,lSearch,&nSearch)) {
+                            if (nVal <= nSearch) {
+                                pos = 0;
+                            }
+                        }
+                    }
+
+                    if (pos > -1) {
+                        addReplyBulk(c,keyobj);
+                        addReplyBulk(c,valobj);
+                        numreps += 2;
+                    }
+
+                    decrRefCount(devalobj);
+                }
+            }
+            decrRefCount(keyobj);
+        }
+    }
+    dictReleaseIterator(di);
+    setDeferredMultiBulkLength(c,replylen,numreps);
+}

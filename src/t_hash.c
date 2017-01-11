@@ -903,3 +903,142 @@ void hmselectCommand(client *c) {
     dictReleaseIterator(di);
     setDeferredMultiBulkLength(c,replylen,numkeys);
 }
+
+
+/*
+hsearch [key pattern] [field] [operator] [value] ...
+*/
+void hsearchCommand(client *c) {
+    int nField = c->argc - 2;
+    if (nField % 3 != 0) {
+        addReplyError(c,"wrong number of arguments for HSEARCH");
+        return;
+    }
+
+    dictIterator *di;
+    dictEntry *de;
+    sds pattern = c->argv[1]->ptr;
+    int i, plen = sdslen(pattern), allkeys;
+    unsigned long numreps = 0;
+
+    void *replylen = addDeferredMultiBulkLength(c);
+    di = dictGetSafeIterator(c->db->dict);
+    allkeys = (pattern[0] == '*' && pattern[1] == '\0');
+
+    int numDeValObjs = (c->argc - 2) / 3;
+    int idxDeValObjs;
+    int found = 0;
+
+    robj **arrValObjs   = zmalloc(numDeValObjs * sizeof(robj *));
+    robj **arrDeValObjs = zmalloc(numDeValObjs * sizeof(robj *));
+
+    while((de = dictNext(di)) != NULL) {
+        sds key = dictGetKey(de);
+        robj *keyobj;
+
+        idxDeValObjs = 0;
+        found = 0;
+
+        if (allkeys || stringmatchlen(pattern,plen,key,sdslen(key),0)) {
+            keyobj = createStringObject(key,sdslen(key));
+            if (expireIfNeeded(c->db,keyobj) == 0) {
+                robj *valobj = dictGetVal(de);
+                if (valobj->type == OBJ_HASH) {
+                    for (i = 2; ; i += 3) {
+                        if (hashTypeExists(valobj,c->argv[i])) {
+                            robj *hvalobj;
+                            if ((hvalobj = hashTypeGetObject(valobj, c->argv[i])) != NULL) {
+                                sds operator  = c->argv[i+1]->ptr;
+                                sds vSearch   = c->argv[i+2]->ptr;
+                                int lSearch   = sdslen(vSearch);
+
+                                robj *hdevalobj = getDecodedObject(hvalobj);
+
+                                sds val = hdevalobj->ptr;
+                                long long nVal, nSearch;
+
+                                int pos = -1;
+                                if (val == NULL) {
+                                    
+                                } else if ((operator[0] == '~' && operator[1] == '\0') || (operator[0] == '~' && operator[1] == '|' && operator [2] == '\0')) {
+                                    char *found = strstr(val, vSearch);
+                                    if (found != NULL) {
+                                        pos = found - val;
+
+                                        if (operator[1] == '|') {
+                                            sdsrange(val,pos-200,pos+200);
+                                        }
+                                    }
+                                } else if (operator[0] == '=' && operator[1] == '\0') {
+                                    if (!strcmp(val, vSearch)) {
+                                        pos = 0;
+                                    }
+                                } else if (operator[0] == '>' && operator[1] == '\0') {
+                                    if (string2ll(val,sdslen(val),&nVal) && string2ll(vSearch,lSearch,&nSearch)) {
+                                        if (nVal > nSearch) {
+                                            pos = 0;
+                                        }
+                                    }
+                                } else if (operator[0] == '<' && operator[1] == '\0') {
+                                    if (string2ll(val,sdslen(val),&nVal) && string2ll(vSearch,lSearch,&nSearch)) {
+                                        if (nVal < nSearch) {
+                                            pos = 0;
+                                        }
+                                    }
+                                } else if (operator[0] == '>' && operator[1] == '=' && operator[2] == '\0') {
+                                    if (string2ll(val,sdslen(val),&nVal) && string2ll(vSearch,lSearch,&nSearch)) {
+                                        if (nVal >= nSearch) {
+                                            pos = 0;
+                                        }
+                                    }
+                                } else if (operator[0] == '<' && operator[1] == '=' && operator[2] == '\0') {
+                                    if (string2ll(val,sdslen(val),&nVal) && string2ll(vSearch,lSearch,&nSearch)) {
+                                        if (nVal <= nSearch) {
+                                            pos = 0;
+                                        }
+                                    }
+                                }
+
+                                arrValObjs[idxDeValObjs] = hvalobj;
+                                arrDeValObjs[idxDeValObjs] = hdevalobj;
+                                idxDeValObjs++;
+
+                                if (pos > -1) {
+                                    if (idxDeValObjs < numDeValObjs) {
+                                        continue;
+                                    } else {
+                                        found = 1;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // if (idxDeValObjs == numDeValObjs) {
+            if (found) {
+                addReplyBulk(c,keyobj);
+                numreps++;
+                for (i = 0; i < idxDeValObjs; i++) {
+                    addReplyBulk(c, arrDeValObjs[i]);
+                    numreps++;
+                }
+            }
+
+            decrRefCount(keyobj);
+            for (i = 0; i < idxDeValObjs; i++) {
+                decrRefCount(arrValObjs[i]);
+                decrRefCount(arrDeValObjs[i]);
+            }
+        }
+    }
+
+    zfree(arrValObjs);
+    zfree(arrDeValObjs);
+
+    dictReleaseIterator(di);
+    setDeferredMultiBulkLength(c,replylen,numreps);
+}
+
