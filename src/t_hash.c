@@ -990,7 +990,7 @@ void hselectCommand(client *c) {
                     }
                 }
 
-                addReply(c,shared.emptybulk);
+                addReply(c,shared.nullbulk);
                 numreps++;
             }
         }
