@@ -938,3 +938,62 @@ void hsearchCommand(client *c) {
     setDeferredMultiBulkLength(c,replylen,numreps);
 }
 
+/*
+hselect [num of keys] key1 key2 key3 ... field1 field2 ...
+*/
+void hselectCommand(client *c) {
+    long keynum;
+
+    /* expect keynum input keys to be given */
+    if ((getLongFromObjectOrReply(c, c->argv[1], &keynum, NULL) != C_OK))
+        return;
+
+    if (keynum < 1) {
+        addReplyError(c,
+            "at least 1 input key is needed for HSELECT");
+        return;
+    }
+
+    /* test if the expected number of keys would overflow */
+    if (keynum > c->argc-3) {
+        addReply(c,shared.syntaxerr);
+        return;
+    }
+
+    unsigned long numreps = 0;
+    int i, j;
+
+    void *replylen = addDeferredMultiBulkLength(c);
+    for (i = 0; i < keynum; i++) {
+        robj *key     = c->argv[i+2];
+        robj *hashobj = lookupKeyRead(c->db,key);
+
+        if (hashobj != NULL && hashobj->type == OBJ_HASH) {
+            addReplyBulk(c, key);
+            numreps++;
+
+            for (j = 2 + keynum; j < c->argc; j++ ) {
+                robj *field = c->argv[j];
+
+                if (hashTypeExists(hashobj,field)) {
+                    robj *hvalobj;
+                    if ((hvalobj = hashTypeGetObject(hashobj,field)) != NULL) {
+                        robj *hdevalobj = getDecodedObject(hvalobj);
+
+                        addReplyBulk(c, hdevalobj);
+                        numreps++;
+
+                        decrRefCount(hdevalobj);
+                        decrRefCount(hvalobj);
+
+                        continue;
+                    }
+                }
+
+                addReply(c,shared.emptybulk);
+                numreps++;
+            }
+        }
+    }
+    setDeferredMultiBulkLength(c,replylen,numreps);
+}
