@@ -866,7 +866,7 @@ void hsearchCommand(client *c) {
                                         }
                                     }
                                 } else if (operator[0] == '=' && operator[1] == '\0') {
-                                    if (!strcmp(val, vSearch)) {
+                                    if ((vSearch[0] == '*' && vSearch[1] == '\0') || !strcmp(val, vSearch)) {
                                         pos = 0;
                                     }
                                 } else if (operator[0] == '>' && operator[1] == '\0') {
