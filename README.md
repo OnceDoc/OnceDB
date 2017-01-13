@@ -98,7 +98,7 @@ Windows
 
 批量打印出指定key的hash字段值
 
-    127.0.0.1:6379> hselect 2 user:001 user:002 name email age
+    127.0.0.1:6379> hselect 3 name email age user:001 user:002
     1) "user:001"
     2) "kris"
     3) "c2u@live.cn"
