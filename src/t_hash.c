@@ -997,3 +997,35 @@ void hselectCommand(client *c) {
     }
     setDeferredMultiBulkLength(c,replylen,numreps);
 }
+
+/*
+hmgetall key1 key2 key3 ...
+*/
+void hmgetallCommand(client *c) {
+    int numreps = 0, i;
+
+    void *replylen = addDeferredMultiBulkLength(c);
+    for (i = 1; i < c->argc; i++) {
+        robj *key = c->argv[i];
+        robj *o;
+
+        if ((o = lookupKeyRead(c->db, key)) == NULL
+            || o->type != OBJ_HASH) continue;
+
+        addReplyBulk(c, key);
+        numreps++;
+
+        hashTypeIterator *hi = hashTypeInitIterator(o);
+        while (hashTypeNext(hi) != C_ERR) {
+            addHashIteratorCursorToReply(c, hi, OBJ_HASH_KEY);
+            addHashIteratorCursorToReply(c, hi, OBJ_HASH_VALUE);
+            numreps += 2;
+        }
+        hashTypeReleaseIterator(hi);
+
+        addReply(c,shared.nullbulk);
+        addReply(c,shared.nullbulk);
+        numreps += 2;
+    }
+    setDeferredMultiBulkLength(c,replylen,numreps);
+}

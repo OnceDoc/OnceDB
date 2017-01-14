@@ -1605,6 +1605,7 @@ void hscanCommand(client *c);
 void searchCommand(client *c);
 void hsearchCommand(client *c);
 void hselectCommand(client *c);
+void hmgetallCommand(client *c);
 void configCommand(client *c);
 void hincrbyCommand(client *c);
 void hincrbyfloatCommand(client *c);

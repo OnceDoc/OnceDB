@@ -46,13 +46,13 @@ Windows
     127.0.0.1:6379> set test5 100
     OK
 
-= 完全匹配搜索
+= 完全匹配搜索: 在指定pattern的key中搜索含有指定值的key和值
 
     127.0.0.1:6379> search test* = kris
     1) "test3"
     2) "kris"
 
-~ 模糊搜索
+~ 模糊搜索: 搜索含有指定值的key及其值
 
     127.0.0.1:6379> search test* ~ is
     1) "test2"
@@ -60,7 +60,7 @@ Windows
     3) "test1"
     4) "this is testing"
 
-~| 包含并截取: 如果值过长则截取其中一段值打印，如果文字较短则会不截取
+~| 包含并截取: 搜索含有指定值的key及其值，如果值过长则截取其中一段值打印，如果文字较短则会不截取
 
     127.0.0.1:6379> search test* ~| is
     1) "test2"
@@ -78,7 +78,7 @@ Windows
 
 ### hsearch [key pattern] [field] [operator] [value]
 
-搜索hash类型的健值，operator同search
+搜索hash类型的健值，operator同search，支持：=、~、~|、>、<、>=、<=
 
 准备测试数据
 
@@ -87,16 +87,16 @@ Windows
     127.0.0.1:6379> hmset user:002 name sunny age 24
     OK
 
-搜索hash值age大于18，并打印出名字
+搜索age大于18的key和搜索到的值，并打印name字段
 
     127.0.0.1:6379> hsearch user:* age > 18 name ~ ''
     1) "user:002"
     2) "24"
     3) "sunny"
 
-### hselect [num of keys] key1 key2 key3 ... field1 field2 ...
+### hselect [num of fields] field1 field2 ... key1 key2 key3 ...
 
-批量打印出指定key的hash字段值
+批量打印出key的指定字段值，不含对应字段的显示null
 
     127.0.0.1:6379> hselect 3 name email age user:001 user:002
     1) "user:001"
@@ -107,3 +107,25 @@ Windows
     6) "sunny"
     7) (nil)
     8) "24"
+
+### hmgetall key1 key2 ...
+
+批量打印出指定key的全部字段和值，以两个null分隔
+
+    127.0.0.1:6379> hmgetall user:001 user:002
+     1) "user:001"
+     2) "name"
+     3) "kris"
+     4) "email"
+     5) "c2u@live.cn"
+     6) "gender"
+     7) "male"
+     8) (nil)
+     9) (nil)
+    10) "user:002"
+    11) "name"
+    12) "sunny"
+    13) "age"
+    14) "24"
+    15) (nil)
+    16) (nil)
