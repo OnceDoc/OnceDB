@@ -190,6 +190,326 @@ void listTypeConvert(robj *subject, int enc) {
     }
 }
 
+
+
+
+/*-----------------------------------------------------------------------------
+ * Sorted List
+ *----------------------------------------------------------------------------*/
+/*
+get position of given value in list
+*/
+PORT_LONG getPosition(PORT_LONGLONG search, robj *o, PORT_LONG llen, int isBigtoSmall, int isBigger, int *hasItem) {
+    PORT_LONG low, high, mid;
+  
+    low  = 0;
+    high = llen - 1;
+
+    while ( low <= high ) {  
+        mid = (low + high) / 2;
+        quicklistEntry val;
+        if (quicklistIndex(o->ptr, mid, &val)) {
+            if (val.value) {
+                return -1;
+            }
+        } else {
+            return -1;
+        }
+
+        if (search < val.longval) {
+            if (isBigtoSmall) {
+                low  = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        else if (search > val.longval) {
+            if (isBigtoSmall) {
+                high = mid - 1;
+            } else {
+                low  = mid + 1; 
+            }
+        }
+        else {
+            *hasItem = 1;
+            return mid;
+        }
+    }
+
+    if ( (isBigtoSmall && isBigger)
+      || (!isBigtoSmall && !isBigger)) {
+        high++;
+    }
+
+    return high;
+}
+
+void xinsertGenericCommand(client *c, int isBigtoSmall, int allowDuplicate) {
+    robj *key   = c->argv[1];
+    robj *value = c->argv[2];
+    int len = sdslen(value->ptr);
+    PORT_LONGLONG nValue;
+
+    if ((getLongLongFromObjectOrReply(c, value, &nValue, "Wrong value type") != C_OK))
+        return;
+
+    robj *o = lookupKeyRead(c->db,key);
+    if (!o) {
+        o = createQuicklistObject();
+        quicklistSetOptions(o->ptr, server.list_max_ziplist_size, server.list_compress_depth);
+        dbAdd(c->db,key,o);
+        listTypePush(o,value,isBigtoSmall ? LIST_HEAD : LIST_TAIL);
+        addReplyLongLong(c,0);
+        goto send_xinsert_event;
+    } else if (checkType(c,o,OBJ_LIST)) {
+        addReplyError(c,"It is not OBJ_LIST");
+        return;
+    }
+
+    if (o->encoding != OBJ_ENCODING_QUICKLIST) {
+        serverPanic("Unknown list encoding");
+        return;
+    }
+
+    PORT_LONG llen = listTypeLength(o);
+    quicklistEntry first, last;
+    if ( !quicklistIndex(o->ptr, 0, &first)
+      || !quicklistIndex(o->ptr, llen-1, &last)) {
+        addReply(c,shared.emptymultibulk);
+        return;
+    }
+
+    if (first.value || last.value) {
+        addReplyError(c,"Wrong list type");
+        return;
+    }
+
+    if ( (first.longval > last.longval && !isBigtoSmall)
+      || (first.longval < last.longval && isBigtoSmall)) {
+        addReplyError(c,"Wrong list sort");
+        return;
+    }
+
+    if (!allowDuplicate && (nValue == first.longval || nValue == last.longval)) {
+        addReplyBulkLongLong(c,-1);
+        return;
+    }
+
+    if (isBigtoSmall) {
+        if (nValue >= first.longval) {
+            quicklistInsertBefore(o->ptr, &first, value->ptr, len);
+            addReplyBulkLongLong(c,0);
+            goto send_xinsert_event;
+        }
+        if (nValue <= last.longval) {
+            quicklistInsertAfter(o->ptr, &last, value->ptr, len);
+            addReplyBulkLongLong(c,llen);
+            goto send_xinsert_event;
+        }
+    } else {
+        if (nValue < first.longval || (allowDuplicate && nValue == first.longval)) {
+            quicklistInsertBefore(o->ptr, &first, value->ptr, len);
+            addReplyBulkLongLong(c,0);
+            goto send_xinsert_event;
+        }
+        if (nValue > last.longval || (allowDuplicate && nValue == last.longval)) {
+            quicklistInsertAfter(o->ptr, &last, value->ptr, len);
+            addReplyBulkLongLong(c,llen);
+            goto send_xinsert_event;
+        }
+    }
+
+    int hasItem = 0;
+    PORT_LONG index = getPosition(nValue, o, llen, isBigtoSmall, 0, &hasItem);
+    if (hasItem && !allowDuplicate) {
+        addReplyLongLong(c,-1);
+        return;
+    }
+
+    quicklistEntry entry;
+    if (quicklistIndex(o->ptr, index, &entry)) {
+        if (entry.value) {
+            addReplyLongLong(c,-1);
+            return;
+        }
+    } else {
+        addReplyLongLong(c,-1);
+        return;
+    }
+
+    if (isBigtoSmall) {
+        quicklistInsertAfter(o->ptr, &entry, value->ptr, len);
+        addReplyBulkLongLong(c,index+1);
+    } else {
+        quicklistInsertBefore(o->ptr, &entry, value->ptr, len);
+        addReplyBulkLongLong(c,index);
+    }
+
+  send_xinsert_event:
+    signalModifiedKey(c->db,key);
+    notifyKeyspaceEvent(NOTIFY_LIST, isBigtoSmall ? "xinsertdesc" : "xinsert",c->argv[1],c->db->id);
+    server.dirty++;
+}
+
+void xinsertCommand(client *c) {
+    xinsertGenericCommand(c, 0, 0);
+}
+
+void xinsertdescCommand(client *c) {
+    xinsertGenericCommand(c, 1, 0);
+}
+
+void xrangeCommand(client *c) {
+    robj *o;
+    PORT_LONGLONG from, to;
+    PORT_LONG start = -1, end = -1, llen, rangelen;
+
+    if ((getLongLongFromObjectOrReply(c, c->argv[2], &from, NULL) != C_OK) ||
+        (getLongLongFromObjectOrReply(c, c->argv[3], &to, NULL) != C_OK)) return;
+
+    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptymultibulk)) == NULL
+         || checkType(c,o,OBJ_LIST)) return;
+    llen = listTypeLength(o);
+
+    if (o->encoding != OBJ_ENCODING_QUICKLIST) {
+        serverPanic("List encoding is not QUICKLIST!");
+        return;
+    }
+
+    /*
+    parameter must from small to big
+    */
+    if (from >= to) {
+        addReplyError(c,"First parameter should be smaller");
+        return;
+    }
+
+    quicklistEntry first, last;
+    if ( !quicklistIndex(o->ptr, 0, &first)
+      || !quicklistIndex(o->ptr, llen-1, &last)) {
+        addReply(c,shared.emptymultibulk);
+        return;
+    }
+
+    if (first.value || last.value) {
+        addReply(c,shared.emptymultibulk);
+        return;
+    }
+
+    int isBigtoSmall = 0;
+    if (first.longval > last.longval) {
+        isBigtoSmall = 1;
+    }
+
+    if (isBigtoSmall) {
+        if (to >= first.longval) {
+            end = 0;
+        }
+        if (from <= last.longval) {
+            start = llen-1;
+        }
+    } else {
+        if (from <= first.longval) {
+            start = 0;
+        }
+        if (to >= last.longval) {
+            end = llen-1;
+        }
+    }
+
+    int hasItem = 0;
+    if (start == -1) {
+        start = getPosition(from, o, llen, isBigtoSmall, 0, &hasItem);
+    }
+    if (end == -1) {
+        end   = getPosition(to, o, llen, isBigtoSmall, 1, &hasItem);
+    }
+
+    /* Invariant: start >= 0, so this test will be true when end < 0.
+     * The range is empty when start > end or start >= length. */
+    if (start == -1 || end == -1) {
+        addReply(c,shared.emptymultibulk);
+        return;
+    }
+
+    if (isBigtoSmall) {
+        if (start < end) {
+            addReply(c,shared.emptymultibulk);
+            return;
+        } else {
+            PORT_LONG tmp = end;
+            end   = start;
+            start = tmp;
+        }
+    }
+
+    if (start > end) {
+        addReply(c,shared.emptymultibulk);
+        return;
+    }
+
+    rangelen = (end-start) + 1;
+
+    /* Return the result in form of a multi-bulk reply */
+    addReplyMultiBulkLen(c,rangelen);
+    listTypeIterator *iter = listTypeInitIterator(o, start, LIST_TAIL);
+
+    while (rangelen--) {
+        listTypeEntry entry;
+        listTypeNext(iter, &entry);
+        quicklistEntry *qe = &entry.entry;
+        if (qe->value) {
+            addReplyBulkCBuffer(c,qe->value,qe->sz);
+        } else {
+            addReplyBulkLongLong(c,qe->longval);
+        }
+    }
+    listTypeReleaseIterator(iter);
+}
+
+void xsearchCommand(client *c) {
+    robj *o = lookupKeyReadOrReply(c,c->argv[1],shared.nullbulk);
+    if (o == NULL || checkType(c,o,OBJ_LIST)) return;
+    PORT_LONGLONG search;
+
+    if ((getLongLongFromObjectOrReply(c, c->argv[2], &search, NULL) != C_OK))
+        return;
+
+    if (o->encoding == OBJ_ENCODING_QUICKLIST) {
+        quicklistEntry entry;
+        PORT_LONG llen = listTypeLength(o);
+
+        quicklistEntry first, last;
+        if ( !quicklistIndex(o->ptr, 0, &first)
+          || !quicklistIndex(o->ptr, llen-1, &last)) {
+            addReply(c,shared.emptymultibulk);
+            return;
+        }
+
+        if (first.value || last.value) {
+            addReply(c,shared.emptymultibulk);
+            return;
+        }
+
+        int isBigtoSmall = 0;
+        if (first.longval > last.longval) {
+            isBigtoSmall = 1;
+        }
+
+        int hasItem = 0;
+        PORT_LONG index = getPosition(search, o, llen, isBigtoSmall, 1, &hasItem);
+
+        if (hasItem) {
+            addReplyBulkLongLong(c,index);
+        } else {
+            addReplyBulkLongLong(c,-1);
+        }
+    } else {
+        serverPanic("Unknown list encoding");
+    }
+}
+
+
 /*-----------------------------------------------------------------------------
  * List Commands
  *----------------------------------------------------------------------------*/
