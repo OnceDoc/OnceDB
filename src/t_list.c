@@ -199,8 +199,8 @@ void listTypeConvert(robj *subject, int enc) {
 /*
 get position of given value in list
 */
-PORT_LONG getPosition(PORT_LONGLONG search, robj *o, PORT_LONG llen, int isBigtoSmall, int isBigger, int *hasItem) {
-    PORT_LONG low, high, mid;
+long getPosition(long long search, robj *o, long llen, int isBigtoSmall, int isBigger, int *hasItem) {
+    long low, high, mid;
   
     low  = 0;
     high = llen - 1;
@@ -248,7 +248,7 @@ void xinsertGenericCommand(client *c, int isBigtoSmall, int allowDuplicate) {
     robj *key   = c->argv[1];
     robj *value = c->argv[2];
     int len = sdslen(value->ptr);
-    PORT_LONGLONG nValue;
+    long long nValue;
 
     if ((getLongLongFromObjectOrReply(c, value, &nValue, "Wrong value type") != C_OK))
         return;
@@ -271,7 +271,7 @@ void xinsertGenericCommand(client *c, int isBigtoSmall, int allowDuplicate) {
         return;
     }
 
-    PORT_LONG llen = listTypeLength(o);
+    long llen = listTypeLength(o);
     quicklistEntry first, last;
     if ( !quicklistIndex(o->ptr, 0, &first)
       || !quicklistIndex(o->ptr, llen-1, &last)) {
@@ -320,7 +320,7 @@ void xinsertGenericCommand(client *c, int isBigtoSmall, int allowDuplicate) {
     }
 
     int hasItem = 0;
-    PORT_LONG index = getPosition(nValue, o, llen, isBigtoSmall, 0, &hasItem);
+    long index = getPosition(nValue, o, llen, isBigtoSmall, 0, &hasItem);
     if (hasItem && !allowDuplicate) {
         addReplyLongLong(c,-1);
         return;
@@ -361,8 +361,8 @@ void xinsertdescCommand(client *c) {
 
 void xrangeCommand(client *c) {
     robj *o;
-    PORT_LONGLONG from, to;
-    PORT_LONG start = -1, end = -1, llen, rangelen;
+    long long from, to;
+    long start = -1, end = -1, llen, rangelen;
 
     if ((getLongLongFromObjectOrReply(c, c->argv[2], &from, NULL) != C_OK) ||
         (getLongLongFromObjectOrReply(c, c->argv[3], &to, NULL) != C_OK)) return;
@@ -437,7 +437,7 @@ void xrangeCommand(client *c) {
             addReply(c,shared.emptymultibulk);
             return;
         } else {
-            PORT_LONG tmp = end;
+            long tmp = end;
             end   = start;
             start = tmp;
         }
@@ -470,14 +470,14 @@ void xrangeCommand(client *c) {
 void xsearchCommand(client *c) {
     robj *o = lookupKeyReadOrReply(c,c->argv[1],shared.nullbulk);
     if (o == NULL || checkType(c,o,OBJ_LIST)) return;
-    PORT_LONGLONG search;
+    long long search;
 
     if ((getLongLongFromObjectOrReply(c, c->argv[2], &search, NULL) != C_OK))
         return;
 
     if (o->encoding == OBJ_ENCODING_QUICKLIST) {
         quicklistEntry entry;
-        PORT_LONG llen = listTypeLength(o);
+        long llen = listTypeLength(o);
 
         quicklistEntry first, last;
         if ( !quicklistIndex(o->ptr, 0, &first)
@@ -497,7 +497,7 @@ void xsearchCommand(client *c) {
         }
 
         int hasItem = 0;
-        PORT_LONG index = getPosition(search, o, llen, isBigtoSmall, 1, &hasItem);
+        long index = getPosition(search, o, llen, isBigtoSmall, 1, &hasItem);
 
         if (hasItem) {
             addReplyBulkLongLong(c,index);
