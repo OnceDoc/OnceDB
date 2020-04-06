@@ -4,11 +4,54 @@ OnceDB uses operators to dynamically define indexes. OnceDB do not changing the 
 
 # Document
 
-http://oncedb.com
+https://oncedb.com/wiki/view/oncedb-server
 
 # Driver
 
-Node.js: Comming soon...
+Node.js:
+
+You can use the following code to update and query the data:
+
+```
+const util    = require('util')
+const oncedb  = require('oncedb')()
+
+const update  = util.promisify(oncedb.update).bind(oncedb)
+const select  = util.promisify(oncedb.select).bind(oncedb)
+
+//Defining the schema
+oncedb.schema('user', {
+    username  : 'id'
+  , password  : ''
+  , title     : 'index'
+  , skills    : 'keywords'
+});
+
+(async () => {
+  // update data
+  await upsert('user', { username: 'dota', password: '123456', title: 'SDEI', skills: 'java,go,c' })
+  // query data
+  let rows = await select('user', { skills: 'c' })
+
+  console.log('rows.count', rows.count)
+  console.log(rows)
+})();
+
+```
+Result
+
+```
+rows.count 1
+[
+  {
+    _key: 'user:dota',
+    skills: [ 'java', 'go', 'c' ],
+    username: 'dota',
+    password: '123456',
+    title: 'SDEI'
+  }
+]
+```
 
 
 # Release
